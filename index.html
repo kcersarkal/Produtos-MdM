@@ -553,10 +553,8 @@ function renderProduct(asin) {
 function shareWhatsApp(asin) {
   const p = getActiveProducts().find(item => item.asin === asin);
   if (!p) return;
-  const productUrl = `${window.location.origin}${window.location.pathname}#produto/${p.asin}`;
-  const discount = discountPercent(p);
-  const oldPrice = priceNumber(p.price_original) !== null ? `De R$ ${fmtPrice(p.price_original)} por ` : "";
-  const text = `🔥 *${p.title}*\n\n${oldPrice}*R$ ${fmtPrice(p.price_current)}*${discount ? ` (-${discount}%)` : ""}${p.parcelamento ? `\n${p.parcelamento}` : ""}${p.coupon_code ? `\n🎟️ Cupom: ${p.coupon_code}` : ""}\n\n${productUrl}`;
+  const productUrl = `${window.location.origin}${window.location.pathname}?produto=${p.asin}`;
+  const text = `🔥 *${p.title}*\n\nDe R$ ${fmtPrice(p.price_original)} por *R$ ${fmtPrice(p.price_current)}* (-${p.discount_percent}%)${p.coupon_code ? `\n🎟️ Cupom: ${p.coupon_code}` : ""}\n\n${productUrl}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
 }
 
