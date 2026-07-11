@@ -414,13 +414,18 @@ function couponMarkup(code) {
 }
 
 function productCard(p) {
+  const hasDiscount = p.price_original && p.price_original !== p.price_current;
   return `
     <article class="card" onclick="navigate('produto','${p.asin}')" role="link" tabindex="0" aria-label="Ver oferta: ${p.title}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();navigate('produto','${p.asin}');}">
-      <div class="card-link" style="padding:22px;">
+      <div class="card-link">
+        <div class="card-img">
+          <img src="${p.image}" alt="${p.title}" loading="lazy">
+        </div>
         <div class="card-body">
           <h3 class="card-title">${p.title}</h3>
-          <div class="price-row">
-            <span class="price-current">R$ <small>${fmtPrice(p.price_current)}</small></span>
+          <div class="price-row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+            ${hasDiscount ? `<span class="price-original">R$ ${fmtPrice(p.price_original)}</span>` : ''}
+            <span class="price-current">R$ ${fmtPrice(p.price_current)}</span>
           </div>
           <div class="card-footer">
             <div class="card-cta">Ver produto
