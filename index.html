@@ -377,7 +377,24 @@ const PRODUCTS = [
 const AFFILIATE_TAG = "mixdm22-20";
 const MAX_HOURS_STALE = 12;
 
-function fmtPrice(v) { return v.toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+function priceNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/R\$\s*/gi, "").replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function fmtPrice(value) {
+  const price = priceNumber(value);
+  return price === null ? "Indisponível" : price.toLocaleString("pt-BR", { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function discountPercent(p) {
+  const current = priceNumber(p.price_current);
+  const original = priceNumber(p.price_original);
+  return current !== null && original !== null && original > current
+    ? Math.round((1 - current / original) * 100)
+    : null;
+}
 function hoursSince(iso) { return (Date.now() - new Date(iso).getTime()) / 36e5; }
 function starRow(r) { const f = Math.round(r); return "★".repeat(f) + "☆".repeat(5-f); }
 
@@ -415,25 +432,14 @@ function couponMarkup(code) {
 function productCard(p) {
   return `
     <article class="card" onclick="navigate('produto','${p.asin}')" role="link" tabindex="0" aria-label="Ver oferta: ${p.title}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();navigate('produto','${p.asin}');}">
-      <div class="card-link">
-        <div class="card-img">
-          <img src="${p.image}" alt="${p.title}" loading="lazy">
-          ${discountBadge(p.discount_percent,'sm')}
-        </div>
+      <div class="card-link" style="padding:22px;">
         <div class="card-body">
-          <span class="card-category">${p.category}</span>
           <h3 class="card-title">${p.title}</h3>
-          <div class="card-rating">
-            <span class="stars">${starRow(p.rating)}</span>
-            <span class="rating-num">${p.rating} <span class="reviews-count">(${p.reviews_count.toLocaleString("pt-BR")})</span></span>
-          </div>
           <div class="price-row">
             <span class="price-current">R$ <small>${fmtPrice(p.price_current)}</small></span>
           </div>
-          <span class="price-original">R$ ${fmtPrice(p.price_original)}</span>
           <div class="card-footer">
-            ${couponMarkup(p.coupon_code)}
-            <div class="card-cta">Ver oferta
+            <div class="card-cta">Ver produto
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </div>
           </div>
@@ -483,8 +489,7 @@ function renderHome() {
   }
   document.getElementById("empty-state").style.display = "none";
 
-  const spotlight = products.find(p => p.spotlight) || products[0];
-  const rest = products.filter(p => p.asin !== spotlight.asin);
+  const rest = products;
 
   // "Ofertas do dia" é um filtro especial, além das categorias normais
   const baseCategories = [...new Set(products.map(p => p.category))];
@@ -494,7 +499,7 @@ function renderHome() {
     <button class="filter-chip ${cat === activeCategory ? 'active' : ''}" onclick="setCategory('${cat}')">${cat}</button>
   `).join("");
 
-  spotlightSlot.innerHTML = spotlightMarkup(spotlight);
+  spotlightSlot.innerHTML = "";
 
   let filtered = rest;
   if (activeCategory === "Ofertas do dia") {
@@ -530,21 +535,19 @@ function renderProduct(asin) {
   container.innerHTML = `
     <div class="breadcrumb"><span class="link" role="link" tabindex="0" onclick="navigate('home')" onkeydown="if(event.key==='Enter'){navigate('home')}">Início</span> / ${p.category} / ${p.title}</div>
     <div class="product-detail">
-      <div class="product-img"><img src="${p.image}" alt="${p.title}">${discountBadge(p.discount_percent)}</div>
+      <div class="product-img"><img src="${p.image}" alt="${p.title}"></div>
       <div class="product-info">
         <span class="product-category">${p.category}</span>
         <h1 class="product-title">${p.title}</h1>
-        <div class="product-rating">
-          <span class="stars">${starRow(p.rating)}</span>
-          <span>${p.rating} · ${p.reviews_count.toLocaleString("pt-BR")} avaliações na Amazon</span>
-        </div>
         <div class="product-price-block">
           <div class="price-row">
             <span class="price-current">R$ <small>${fmtPrice(p.price_current)}</small></span>
-            <span class="price-original">R$ ${fmtPrice(p.price_original)}</span>
+            ${priceNumber(p.price_original) !== null ? `<span class="price-original">De R$ ${fmtPrice(p.price_original)}</span>` : ""}
           </div>
           ${p.coupon_code ? `<div style="margin-top:10px;">${couponMarkup(p.coupon_code)}</div>` : ""}
         </div>
+        ${p.parcelamento ? `<p class="installment-info">${p.parcelamento}</p>` : ""}
+        ${p.tem_selo_prime ? `<p class="prime-info">Amazon Prime</p>` : ""}
         <div class="product-desc"><h3>Sobre o produto</h3>${p.description}</div>
         <div class="product-actions">
           <a class="btn btn-primary btn-block" href="${p.affiliate_url}" target="_blank" rel="nofollow sponsored noopener">Ver na Amazon</a>
@@ -562,7 +565,9 @@ function shareWhatsApp(asin) {
   const p = getActiveProducts().find(item => item.asin === asin);
   if (!p) return;
   const productUrl = `${window.location.origin}${window.location.pathname}#produto/${p.asin}`;
-  const text = `🔥 *${p.title}*\n\nDe R$ ${fmtPrice(p.price_original)} por *R$ ${fmtPrice(p.price_current)}* (-${p.discount_percent}%)${p.coupon_code ? `\n🎟️ Cupom: ${p.coupon_code}` : ""}\n\n${productUrl}`;
+  const discount = discountPercent(p);
+  const oldPrice = priceNumber(p.price_original) !== null ? `De R$ ${fmtPrice(p.price_original)} por ` : "";
+  const text = `🔥 *${p.title}*\n\n${oldPrice}*R$ ${fmtPrice(p.price_current)}*${discount ? ` (-${discount}%)` : ""}${p.parcelamento ? `\n${p.parcelamento}` : ""}${p.coupon_code ? `\n🎟️ Cupom: ${p.coupon_code}` : ""}\n\n${productUrl}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
 }
 
